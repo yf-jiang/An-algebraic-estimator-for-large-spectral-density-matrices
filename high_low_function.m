@@ -28,8 +28,11 @@ f = 0:1/12:0.5; %% sampled frequencies (include 0.5 for tecnical reasons)
 
 n_lag = 0;
 
-[E_r, Lambda] = generate_val_vec(p, r, c, tau, alpha);
+% define shape
+shape = 'from high to low';
 
+[E_r, Lambda] = generate_val_vec(p, r, c, tau, alpha);
+delay = lowRank_coeff_generation(p, r, coef_lag, pert_soft, no_pert, E_r);
 
 % low rank componant generation: eigenvectors & eigenvalues
 function [E_r, Lambda] = generate_val_vec(p, r, c, tau, alpha)
@@ -95,7 +98,7 @@ function [E_r, Lambda] = generate_val_vec(p, r, c, tau, alpha)
     end
 
     % B_new=zeros(p);
-    B = vec*Lambda*vec';
+    B = E_r * Lambda * E_r';
     
     %{
     rank(B)
@@ -130,7 +133,7 @@ for j=2:T_A
     for h=1:T_A
         v(h)=sum(V(h,1:(j-1)));
     end;
-   E(:,j)=K(:,j)-v;
+   E(:,j)=K(:,j) - v;
 end;
 
 for i=1:T_A
@@ -151,98 +154,123 @@ v
 E_r=E(:,v)
 %}
 
-var_1==0 var_2==0
-n_boh=1;
-if same_rank==1
-n_lag=length(coef_lag)-1;
-lag_0=0;
-clear A_delay Coef_lag
-for lag = 0:n_lag
-    
-    if lag<2
-        % lag coefficients for spectral shape:
-        % da alto verso il basso (ones_perm=[-1 1 0]) o 
-        % dal basso verso l'alto (ones_perm=[1 -1 0])
-        % oppure (vedi 'spectral_generation_U_shape')
-        % U rovesciata (ones_perm=[-1 0 1]) o
-        % U (ones_perm=[1 0 -1])
-        ones_2=[ones(1) -ones(1)]
-        ones_perm=ones_2(randperm(2))
-        sign_2=ones_perm(lag+1)
-    end
+function [AA_delay_all] = lowRank_coeff_generation(p, r, coef_lag, pert_soft, shape, no_pert, E_r)
 
-    
-    if lag==2
-        ones_2(lag+1)=0;
-        ones_perm(lag+1)=0;
-        sign_2(lag+1)=0;
-    end
-    
-    % low rank semi-coefficient matrices generation
-    if no_pert==1
-        A_delay(:,:,lag+1)=ones_perm(lag+1)*sqrt(coef_lag(lag+1))*E_r(lag_0*p+1:(lag_0+1)*p,:);
-    end
-    
-    % latent eigenvalue perturbation
-    if no_pert==0
-  
-    % gamma: extreme    
-    if pert_soft==0
-        
-        vec_coef=repmat(r*(coef_lag(lag+1)), r, 1);
-        vec_lag = gamrnd(repmat(vec_coef, 1, n_boh),1);
-        vec_sum =sum(vec_lag);
-        %vec_lag = vec_lag./repmat(vec_sum, size(vec_lag, 1), 1);
-        vec_lag = vec_lag./(vec_sum)*(r*(coef_lag(lag+1)));
+    % var_1==0 var_2==0
+   
+    n_boh = 1;
 
-        if lag<n_lag
-            Coef_lag(:,:,lag+1)=diag(vec_lag);
-        end
-    
-        if lag==n_lag
-            for i=1:r
-                Coef_lag(i,i,lag+1)=sum((coef_lag))-sum(Coef_lag(i,i,:));
+    if same_rank==1
+        n_lag = length(coef_lag) - 1;
+        lag_0 = 0;
+        clear A_delay Coef_lag
+
+        for lag = 0:n_lag
+            
+            if lag < 2
+                
+                if shape == 'from high to low'
+                    ones_perm = [-1 1 0];
+                
+                elseif shape == 'from low to high'
+                    ones_perm = [1 -1 0];
+                
+                elseif shape == 'U shape reversed'
+                    ones_perm=[-1 0 1];
+                
+                elseif shape == 'U shape'
+                    ones_perm = [1 0 -1];
+                    
+                else
+                    msg = 'Wrong shape';
+                    error(msg)
+                
+                % lag coefficients for spectral shape:
+                % da alto verso il basso (ones_perm=[-1 1 0]) o 
+                % dal basso verso l'alto (ones_perm=[1 -1 0])
+                % oppure (vedi 'spectral_generation_U_shape')
+                % U rovesciata (ones_perm=[-1 0 1]) o
+                % U (ones_perm=[1 0 -1])
+                ones_2 = [ones(1) -ones(1)];
+                ones_perm = ones_2(randperm(2));
+                sign_2 = ones_perm(lag+1);
+            end
+
+
+            if lag==2
+                ones_2(lag + 1) = 0;
+                ones_perm(lag + 1) = 0;
+                sign_2(lag + 1) = 0;
+            end
+
+            % low rank semi-coefficient matrices generation
+            if no_pert==1
+                A_delay(:,:,lag+1) = ones_perm(lag+1) * sqrt(coef_lag(lag+1)) * E_r(lag_0*p+1:(lag_0+1)*p,:);
+            end
+
+            % latent eigenvalue perturbation
+            if no_pert==0
+
+                % gamma: extreme    
+                if pert_soft==0
+
+                    vec_coef = repmat(r*(coef_lag(lag+1)), r, 1);
+                    vec_lag = gamrnd(repmat(vec_coef, 1, n_boh),1);
+                    vec_sum = sum(vec_lag);
+                    %vec_lag = vec_lag./repmat(vec_sum, size(vec_lag, 1), 1);
+                    vec_lag = vec_lag./(vec_sum)*(r*(coef_lag(lag+1)));
+
+                    if lag < n_lag
+                        Coef_lag(:,:,lag+1) = diag(vec_lag);
+                    end
+
+                    if lag == n_lag
+                        for i=1:r
+                            Coef_lag(i,i,lag+1) = sum((coef_lag)) - sum(Coef_lag(i,i,:));
+                        end
+                    end
+                end
+
+                % normal: soft
+                if pert_soft == 1
+                    if lag < n_lag
+                        pert_coef = (-prec_pert*coef_lag(lag+1)+2*prec_pert*coef_lag(lag+1)*rand(1,r)); % creating perturbation coef
+                        for i=1:r
+                            Coef_lag(i,i,lag+1) = coef_lag(lag+1) + pert_coef(i); % sum perturbation at each lag
+                        end
+                    end
+
+                    if lag == n_lag
+                        for i = 1:r
+                            Coef_lag(i,i,lag+1) = sum((coef_lag)) - sum(Coef_lag(i,i,:));
+                        end
+                    end
+                end
+
+                A_delay(:,:,lag+1) = E_r(lag_0*p+1:(lag_0+1)*p,:) * sqrt(Coef_lag(:,:,lag+1));
             end
         end
     end
-    
-    % normal: soft
-    if pert_soft==1
-        if lag < n_lag
-            pert_coef=(-prec_pert*coef_lag(lag+1)+2*prec_pert*coef_lag(lag+1)*rand(1,r)); % creating perturbation coef
-            for i=1:r
-                Coef_lag(i,i,lag+1)=coef_lag(lag+1)+pert_coef(i); % sum perturbation at each lag
-            end
-        end
-        
-        if lag==n_lag
-            for i=1:r
-                Coef_lag(i,i,lag+1)=sum((coef_lag))-sum(Coef_lag(i,i,:));
-            end
+
+    size(E_r)
+    size(A_delay)
+
+    for lag=0:n_lag
+        for ncomp=1:r
+            norm_comp(lag+1,ncomp) = norm(A_delay(:,ncomp,lag+1));
         end
     end
-    
-    A_delay(:,:,lag+1)=E_r(lag_0*p+1:(lag_0+1)*p,:)*sqrt(Coef_lag(:,:,lag+1));
+
+    for n_comp=1:r
+        norm_r(n_comp) = norm(E_r(:, n_comp));
     end
-end;
-end
 
-size(E_r)
-size(A_delay)
+    for lag_n=n_lag:-1:0
+        for lag=0:lag_n
+            u_lag = n_lag - lag_n;
+            AA_delay_all(:,:,lag+1,u_lag+1) = A_delay(:,:,lag+u_lag+1) * Lambda(1:r,1:r) * A_delay(:,:,lag+1)';
+        end
+    end
 
-for lag=0:n_lag
-for ncomp=1:r
-norm_comp(lag+1,ncomp)=norm(A_delay(:,ncomp,lag+1));
-end;
-end
-
-for n_comp=1:r
-    norm_r(n_comp) = norm(E_r(:, n_comp));
-end
-
-for lag_n=n_lag:-1:0
-for lag=0:lag_n
-    u_lag = n_lag-lag_n;
-    AA_delay_all(:,:,lag+1,u_lag+1)=A_delay(:,:,lag+u_lag+1)*Lambda(1:r,1:r)*A_delay(:,:,lag+1)';
-end
+    end
 end
